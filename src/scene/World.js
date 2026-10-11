@@ -3,7 +3,6 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -11,6 +10,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildSite, riverX, SITE, PARK, ENTRANCE_Z } from './site.js';
 import { clamp, lerp, smoothstep, easeInOut, mulberry32 } from './utils.js';
 import { CinematicShader } from './CinematicShader.js';
+import { LiteBloomPass } from './LiteBloomPass.js';
 
 const STATUS_COLORS = {
   available: new THREE.Color('#5fd39a'),
@@ -53,27 +53,72 @@ export class World {
     this.noise = new SimplexNoise({ random: mulberry32(7) });
     this.site = buildSite();
 
-    this.#initRenderer();
-    this.#initSky();
-    this.#initLights();
-    this.#buildTerrain();
-    this.#buildRiver();
-    this.#buildRoads();
-    this.#buildPlots();
-    this.#buildHouses();
-    this.#buildTrees();
-    this.#buildLamps();
-    this.#buildEntrance();
-    this.#buildPark();
-    this.#buildWall();
-    this.#buildDust();
-    this.#buildStars();
-    this.#buildMarker();
-    this.#initPost();
+  }
 
-    this.setKeyframes([{ pos: [0, 85, 250], tgt: [0, 8, -110], night: 0, build: 0.2, plan: 0 }]);
-    this.#applyTimeOfDay(true);
-    this.resize();
+  // Builds the world in small chunks, yielding between them so the page never freezes.
+  async init() {
+    const yieldToPage = () => new Promise((r) => setTimeout(r, 0));
+    const steps = [
+      () => {
+        this.#initRenderer();
+        this.#initSky();
+        this.#initLights();
+      },
+      () => this.#buildTerrain(),
+      () => {
+        this.#buildRiver();
+        this.#buildRoads();
+        this.#buildPlots();
+        this.#buildHouses();
+      },
+      () => this.#buildTrees(),
+      () => {
+        this.#buildLamps();
+        this.#buildEntrance();
+        this.#buildPark();
+        this.#buildWall();
+        this.#buildDust();
+        this.#buildStars();
+        this.#buildMarker();
+        this.#initPost();
+      },
+      () => {
+        this.setKeyframes([{ pos: [0, 85, 250], tgt: [0, 8, -110], night: 0, build: 0.2, plan: 0 }]);
+        this.#applyTimeOfDay(true);
+        this.resize();
+      },
+    ];
+    for (const step of steps) {
+      step();
+      await yieldToPage();
+    }
+    await this.#warmUp(yieldToPage);
+    return this;
+  }
+
+  // Compile shaders a few objects at a time (asynchronously where the browser supports it),
+  // then render one hidden frame, so no single frame stalls the page.
+  async #warmUp(yieldToPage) {
+    const drawables = this.scene.children.filter((o) => o.isMesh || o.isPoints || o.isLine || o.isGroup);
+    const wasVisible = drawables.map((o) => o.visible);
+    drawables.forEach((o) => (o.visible = false));
+    // Drawing into a tiny target (same format as the composer's buffers) forces the driver to
+    // finish linking each program now, in small slices, instead of all at once on the first frame.
+    const probe = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType });
+    for (let i = 0; i < drawables.length; i += 2) {
+      drawables.slice(i, i + 2).forEach((o) => (o.visible = true));
+      await this.renderer.compileAsync(this.scene, this.camera);
+      this.renderer.shadowMap.needsUpdate = true;
+      this.renderer.setRenderTarget(probe);
+      this.renderer.render(this.scene, this.camera);
+      this.renderer.setRenderTarget(null);
+      await yieldToPage();
+    }
+    probe.dispose();
+    drawables.forEach((o, i) => (o.visible = wasVisible[i]));
+    this.renderer.shadowMap.needsUpdate = true;
+    this.composer.render(0);
+    await yieldToPage();
   }
 
   /* ---------------------------------------------------------------- setup */
@@ -85,12 +130,16 @@ export class World {
       powerPreference: 'high-performance',
       stencil: false,
     });
-    r.setPixelRatio(Math.min(window.devicePixelRatio, this.lowPower ? 1 : 1.6));
+    this.maxPixelRatio = Math.min(window.devicePixelRatio, this.lowPower ? 1 : 1.5);
+    r.setPixelRatio(this.maxPixelRatio);
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 0.55;
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.shadowMap.enabled = !this.lowPower;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = THREE.PCFShadowMap;
+    // The scene is mostly static: only re-render shadows when the sun moves or houses grow
+    r.shadowMap.autoUpdate = false;
+    r.shadowMap.needsUpdate = true;
     this.renderer = r;
 
     this.scene = new THREE.Scene();
@@ -199,7 +248,7 @@ export class World {
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     this.terrainGrid = { size, seg, pos };
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     this.scene.add(mesh);
@@ -254,7 +303,7 @@ export class World {
     });
     const roads = new THREE.Mesh(
       mergeGeometries(geos),
-      new THREE.MeshStandardMaterial({ color: '#2a2a2c', roughness: 0.78, metalness: 0.05 })
+      new THREE.MeshLambertMaterial({ color: '#2a2a2c' })
     );
     roads.receiveShadow = true;
     this.scene.add(roads);
@@ -262,7 +311,7 @@ export class World {
     // Avenue centre median
     const median = new THREE.Mesh(
       new THREE.BoxGeometry(1.6, 0.25, ENTRANCE_Z + SITE - 6),
-      new THREE.MeshStandardMaterial({ color: '#4c6a33', roughness: 1 })
+      new THREE.MeshLambertMaterial({ color: '#4c6a33' })
     );
     median.position.set(0, 0.12, (ENTRANCE_Z - SITE) / 2 - 2);
     median.receiveShadow = true;
@@ -296,7 +345,7 @@ export class World {
     const plots = this.site.plots;
     const geo = new THREE.BoxGeometry(1, 0.32, 1);
     geo.translate(0, 0.16, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95 });
+    const mat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
     this.planUniform = { value: 0 };
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uPlan = this.planUniform;
@@ -368,15 +417,13 @@ export class World {
 
   #buildHouses() {
     const tex = this.#windowTextures();
-    this.wallMat = new THREE.MeshStandardMaterial({
+    this.wallMat = new THREE.MeshLambertMaterial({
       map: tex.day,
       emissiveMap: tex.lit,
       emissive: new THREE.Color('#ffb36b'),
-      emissiveIntensity: 0,
-      roughness: 0.8,
-    });
-    const roofMat = new THREE.MeshStandardMaterial({ color: '#9b4d36', roughness: 0.75 });
-    const slabMat = new THREE.MeshStandardMaterial({ color: '#e8e2d6', roughness: 0.6 });
+      emissiveIntensity: 0});
+    const roofMat = new THREE.MeshLambertMaterial({ color: '#9b4d36' });
+    const slabMat = new THREE.MeshLambertMaterial({ color: '#e8e2d6' });
 
     // Window texture belongs on the walls only: point top/bottom faces at a blank texel
     const wallBox = (w, h, d) => {
@@ -437,6 +484,7 @@ export class World {
       });
       mesh.instanceMatrix.needsUpdate = true;
     }
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   #buildTrees() {
@@ -452,7 +500,7 @@ export class World {
       if (Math.abs(x - riverX(z)) < 22) continue;
       const h = this.groundAt(x, z);
       if (h > 260) continue;
-      list.push({ x, z, y: h - 0.4, s: 1 + rand() * 1.6, kind: rand() < 0.5 ? 0 : 1 });
+      list.push({ x, z, y: h - 0.4, s: 1 + rand() * 1.6, kind: rand() < 0.5 ? 0 : 1, hill: true });
     }
 
     const trunkG = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 5).translate(0, 0.7, 0);
@@ -470,14 +518,20 @@ export class World {
       [trunkG.clone().toNonIndexed(), new THREE.IcosahedronGeometry(1.35, 1).scale(1, 0.9, 1).translate(0, 2.4, 0)],
       true
     );
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4330', roughness: 1 });
-    const leafMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true });
+    const trunkMat = new THREE.MeshLambertMaterial({ color: '#5b4330' });
+    const leafMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
     const greens = ['#3f6b35', '#557a3a', '#2f5a34', '#6b7d3a', '#486f3f'].map((c) => new THREE.Color(c));
 
-    [pine, round].forEach((geo, kind) => {
-      const items = list.filter((t) => t.kind === kind);
+    // Hillside forest sits outside the shadow camera, so only layout trees cast shadows
+    [
+      [pine, 0, false],
+      [round, 1, false],
+      [pine, 0, true],
+      [round, 1, true],
+    ].forEach(([geo, kind, hill]) => {
+      const items = list.filter((t) => t.kind === kind && !!t.hill === hill);
       const mesh = new THREE.InstancedMesh(geo, [trunkMat, leafMat], items.length);
-      mesh.castShadow = !this.lowPower;
+      mesh.castShadow = !this.lowPower && !hill;
       items.forEach((t, i) => {
         const s = t.s * 1.6;
         tmpQ.setFromAxisAngle(UP, rand() * Math.PI * 2);
@@ -506,7 +560,7 @@ export class World {
     const lamps = this.site.lamps;
     const pole = new THREE.InstancedMesh(
       new THREE.CylinderGeometry(0.07, 0.1, 4.6, 5).translate(0, 2.3, 0),
-      new THREE.MeshStandardMaterial({ color: '#2e3134', roughness: 0.5, metalness: 0.6 }),
+      new THREE.MeshLambertMaterial({ color: '#2e3134' }),
       lamps.length
     );
     this.lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffcf8f'), toneMapped: false });
@@ -553,8 +607,8 @@ export class World {
   }
 
   #buildEntrance() {
-    const stone = new THREE.MeshStandardMaterial({ color: '#d8c7a6', roughness: 0.7 });
-    const bronze = new THREE.MeshStandardMaterial({ color: '#3a2c1f', roughness: 0.35, metalness: 0.8 });
+    const stone = new THREE.MeshLambertMaterial({ color: '#d8c7a6' });
+    const bronze = new THREE.MeshLambertMaterial({ color: '#3a2c1f' });
     const g = new THREE.Group();
     const pillarGeo = new THREE.BoxGeometry(2.6, 11, 2.6).translate(0, 5.5, 0);
     [-10, 10].forEach((x) => {
@@ -597,7 +651,7 @@ export class World {
     const d = PARK.z1 - PARK.z0;
     const lawn = new THREE.Mesh(
       new THREE.BoxGeometry(w - 0.6, 0.2, d - 0.6),
-      new THREE.MeshStandardMaterial({ color: '#4f7a36', roughness: 1 })
+      new THREE.MeshLambertMaterial({ color: '#4f7a36' })
     );
     lawn.position.set(cx, 0.1, cz);
     lawn.receiveShadow = true;
@@ -605,7 +659,7 @@ export class World {
 
     const track = new THREE.Mesh(
       new THREE.RingGeometry(12.5, 14, 48).rotateX(-Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: '#b5654a', roughness: 0.9 })
+      new THREE.MeshLambertMaterial({ color: '#b5654a' })
     );
     track.scale.set(1.25, 1, 1);
     track.position.set(cx - 2, 0.22, cz);
@@ -623,12 +677,12 @@ export class World {
     const base = new THREE.Mesh(new THREE.BoxGeometry(14, 4.2, 8).translate(0, 2.1, 0), this.glassMat);
     const roof = new THREE.Mesh(
       new THREE.BoxGeometry(17, 0.5, 10.5).translate(0, 4.45, 0),
-      new THREE.MeshStandardMaterial({ color: '#efe7da', roughness: 0.5 })
+      new THREE.MeshLambertMaterial({ color: '#efe7da' })
     );
     const up = new THREE.Mesh(new THREE.BoxGeometry(8, 3.4, 7).translate(-2.5, 6.4, -0.3), this.glassMat);
     const roof2 = new THREE.Mesh(
       new THREE.BoxGeometry(10, 0.45, 8.6).translate(-2.5, 8.3, -0.3),
-      new THREE.MeshStandardMaterial({ color: '#efe7da', roughness: 0.5 })
+      new THREE.MeshLambertMaterial({ color: '#efe7da' })
     );
     [base, roof, up, roof2].forEach((m) => {
       m.castShadow = true;
@@ -647,7 +701,7 @@ export class World {
     });
     const deck = new THREE.Mesh(
       new THREE.BoxGeometry(16, 0.3, 7),
-      new THREE.MeshStandardMaterial({ color: '#d9cdb6', roughness: 0.8 })
+      new THREE.MeshLambertMaterial({ color: '#d9cdb6' })
     );
     deck.position.set(cx + 6, 0.25, cz + 6);
     const water = new THREE.Mesh(new THREE.PlaneGeometry(13, 4.4).rotateX(-Math.PI / 2), this.poolWater);
@@ -656,7 +710,7 @@ export class World {
   }
 
   #buildWall() {
-    const mat = new THREE.MeshStandardMaterial({ color: '#cdbb98', roughness: 0.9 });
+    const mat = new THREE.MeshLambertMaterial({ color: '#cdbb98' });
     const h = 1.8;
     const R = SITE + 9;
     const segs = [
@@ -776,7 +830,7 @@ export class World {
   #initPost() {
     const composer = new EffectComposer(this.renderer);
     composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.35, 0.45, 0.9);
+    this.bloom = new LiteBloomPass({ strength: 0.35, threshold: 0.9 });
     composer.addPass(this.bloom);
     composer.addPass(new OutputPass());
     this.cine = new ShaderPass(CinematicShader);
@@ -892,6 +946,10 @@ export class World {
     const lightDir = tmpS.copy(this.sun).setY(Math.max(this.sun.y, 0.12)).normalize();
     lightDir.lerp(MOON_DIR, 1 - sunK).normalize();
     this.sunLight.position.copy(lightDir).multiplyScalar(420);
+    if (Math.abs(night - (this.lastShadowNight ?? -1)) > 0.01) {
+      this.lastShadowNight = night;
+      this.renderer.shadowMap.needsUpdate = true;
+    }
     this.sunLight.target.position.set(0, 0, 0);
 
     this.hemi.color.set('#ffd9b5').lerp(new THREE.Color('#33476e'), night);
@@ -912,12 +970,13 @@ export class World {
     this.moon.material.opacity = smoothstep(0.45, 0.95, night);
     this.moon.material.color.set('#f4f1ff').multiplyScalar(1 + lit * 2);
     this.dustMat.uniforms.uNight.value = lit;
-    this.bloom.strength = lerp(0.3, 0.72, lit);
-    this.bloom.threshold = lerp(0.9, 0.7, lit);
+    this.bloom.strength = lerp(0.3, 1.25, lit);
+    this.bloom.threshold = lerp(0.9, 0.6, lit);
 
     // Rebuild reflections only when the sky meaningfully changes
-    if (force || Math.abs(night - this.lastEnvNight) > 0.04) {
-      this.lastEnvNight = night;
+    const envLevel = Math.round(night * 4);
+    if (force || envLevel !== this.lastEnvNight) {
+      this.lastEnvNight = envLevel;
       this.envSky.material.uniforms.rayleigh.value = this.sky.material.uniforms.rayleigh.value;
       this.envRT?.dispose();
       this.envRT = this.pmrem.fromScene(this.envScene, 0, 1, 20000);
@@ -996,6 +1055,25 @@ export class World {
     this.cine.uniforms.uTime.value = t;
 
     this.composer.render(dt);
+    this.#adaptResolution(dt);
+  }
+
+  // Drop render resolution on slower GPUs to keep scrolling smooth
+  #adaptResolution(dt) {
+    this.frameTimes ??= [];
+    this.frameTimes.push(dt);
+    if (this.frameTimes.length < 90) return;
+    const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+    this.frameTimes.length = 0;
+    const pr = this.renderer.getPixelRatio();
+    let next = pr;
+    if (avg > 1 / 40 && pr > 0.6) next = Math.max(0.6, pr - 0.2);
+    else if (avg < 1 / 58 && pr < this.maxPixelRatio && this.lowered) next = Math.min(this.maxPixelRatio, pr + 0.1);
+    if (next !== pr) {
+      this.lowered = true;
+      this.renderer.setPixelRatio(next);
+      this.resize();
+    }
   }
 
   resize() {
@@ -1009,7 +1087,6 @@ export class World {
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     const pr = this.renderer.getPixelRatio();
-    this.bloom.setSize(w * pr * 0.5, h * pr * 0.5);
     this.cine.uniforms.uResolution.value.set(w * pr, h * pr);
     this.dustMat.uniforms.uPixel.value = pr;
   }

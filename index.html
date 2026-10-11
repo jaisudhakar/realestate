@@ -11,26 +11,13 @@
     <meta name="theme-color" content="#07090c" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%2307090c'/%3E%3Cpath d='M20 7 L33 33 H27.5 L20 17 L12.5 33 H7 Z' fill='%23d9b26f'/%3E%3C/svg%3E" />
   </head>
-  <body class="is-loading">
+  <body>
+    <div class="backdrop" aria-hidden="true"></div>
     <canvas id="webgl" aria-hidden="true"></canvas>
     <div class="scrim" aria-hidden="true"></div>
     <div class="grain" aria-hidden="true"></div>
     <div class="letterbox letterbox--top" aria-hidden="true"></div>
     <div class="letterbox letterbox--bottom" aria-hidden="true"></div>
-
-    <!-- Preloader -->
-    <div class="loader" id="loader" role="status" aria-live="polite">
-      <div class="loader__inner">
-        <svg class="loader__mark" viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M20 4 L35 35 H29 L20 15.5 L11 35 H5 Z" />
-          <path d="M14.5 27 H25.5" />
-        </svg>
-        <p class="loader__brand">Aurum Estates</p>
-        <div class="loader__bar"><span></span></div>
-        <p class="loader__meta"><span class="loader__count">0</span>% · Surveying the land</p>
-      </div>
-      <div class="loader__curtain"></div>
-    </div>
 
     <!-- Cursor -->
     <div class="cursor" aria-hidden="true">

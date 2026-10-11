@@ -9,7 +9,6 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 
-import { World } from './scene/World.js';
 import { clamp } from './scene/utils.js';
 import { projects, chapters, brand } from './data/content.js';
 import {
@@ -50,13 +49,8 @@ $('#year').textContent = new Date().getFullYear();
 
 /* --------------------------------------------------------------- 3D world */
 
+// The 3D world is code-split and built in the background, so the page is usable immediately.
 let world = null;
-try {
-  world = new World($('#webgl'), { lowPower });
-} catch (err) {
-  console.warn('WebGL unavailable, falling back to static backdrop.', err);
-  document.body.classList.add('no-webgl');
-}
 
 /* --------------------------------------------------------------- scrolling */
 
@@ -65,7 +59,6 @@ const lenis = new Lenis({
   smoothWheel: !reduceMotion,
   easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
 });
-lenis.stop();
 lenis.on('scroll', ScrollTrigger.update);
 gsap.ticker.add((time) => lenis.raf(time * 1000));
 gsap.ticker.lagSmoothing(0);
@@ -621,51 +614,44 @@ form.addEventListener('submit', (e) => {
 function heroIntro() {
   const words = splitWords($('.hero__title'));
   const tl = gsap.timeline();
-  tl.from(words, { yPercent: 120, rotate: 5, duration: 1.6, ease: 'expo.out', stagger: 0.07 }, 0.9)
-    .from('#hero [data-reveal]', { y: 40, opacity: 0, duration: 1.4, ease: 'power3.out', stagger: 0.12 }, 1.3)
-    .from('.nav', { yPercent: -100, opacity: 0, duration: 1.2, ease: 'power3.out' }, 0.5)
-    .to('.hud', { opacity: 1, duration: 1.5 }, 1.8);
+  tl.from(words, { yPercent: 120, rotate: 5, duration: 1.4, ease: 'expo.out', stagger: 0.06 }, 0.05)
+    .from('#hero [data-reveal]', { y: 30, opacity: 0, duration: 1.1, ease: 'power3.out', stagger: 0.08 }, 0.3)
+    .from('.nav', { yPercent: -100, opacity: 0, duration: 1, ease: 'power3.out' }, 0)
+    .to('.hud', { opacity: 1, duration: 1.2 }, 0.6);
   return tl;
 }
 
 function boot() {
-  buildFrames();
-  initMasterplan();
   initMagnetic();
   initTilt($('#projects-track'));
   setupScrollAnimations();
   showQuote(0);
-
-  // Warm up shaders so the first frames after the curtain are smooth
-  if (world) {
-    world.renderer.compile(world.scene, world.camera);
-    world.update();
-  }
-
-  const counter = $('.loader__count');
-  const bar = $('.loader__bar span');
-  const o = { v: 0 };
-  gsap
-    .timeline()
-    .to(o, {
-      v: 100,
-      duration: reduceMotion ? 0.3 : 2.4,
-      ease: 'power2.inOut',
-      onUpdate: () => {
-        counter.textContent = Math.round(o.v);
-        bar.style.transform = `scaleX(${o.v / 100})`;
-      },
-    })
-    .to('.loader__inner', { y: -30, opacity: 0, duration: 0.8, ease: 'power3.in' }, '+=0.15')
-    .to('#loader', { clipPath: 'inset(0 0 100% 0)', duration: 1.4, ease: 'expo.inOut' }, '-=0.2')
-    .add(() => {
-      document.body.classList.remove('is-loading');
-      lenis.start();
-      if (world) gsap.to(world, { intro: 0, duration: reduceMotion ? 0.01 : 5, ease: 'power2.inOut' });
-      heroIntro();
-    }, '-=1.2')
-    .add(() => $('#loader').remove());
+  heroIntro();
+  document.fonts?.ready.then(() => ScrollTrigger.refresh());
+  // Let the first paint happen before starting the heavy 3D work
+  requestAnimationFrame(() => setTimeout(loadWorld, 0));
 }
 
-if (document.readyState === 'complete') boot();
-else window.addEventListener('load', boot);
+async function loadWorld() {
+  try {
+    const { World } = await import('./scene/World.js');
+    world = await new World($('#webgl'), { lowPower }).init();
+  } catch (err) {
+    console.warn('WebGL unavailable, falling back to static backdrop.', err);
+    world = null;
+    document.body.classList.add('no-webgl');
+    initMasterplan();
+    return;
+  }
+  buildFrames();
+  initMasterplan();
+  computeAnchors();
+  // Short fly-in, skipped if the visitor has already started scrolling
+  world.intro = reduceMotion || lenis.scroll > innerHeight * 0.3 ? 0 : 1;
+  world.setProgress(progressAt(lenis.scroll));
+  world.update();
+  document.body.classList.add('world-ready');
+  if (world.intro) gsap.to(world, { intro: 0, duration: 3, ease: 'power3.out' });
+}
+
+boot();

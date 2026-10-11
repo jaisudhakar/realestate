@@ -11,7 +11,7 @@ approvals, amenities, trust stats, enquiry form) — but with an original brand,
 
 | Scene / chapter | What happens |
 | --- | --- |
-| **Preloader** | Animated monogram, counter and curtain wipe, then a 5-second aerial fly-in |
+| **Instant start** | No blocking preloader: the page is usable immediately over a golden-hour backdrop while the 3D world builds in the background, then fades in with a short 3-second fly-in |
 | **Hero** | Golden-hour aerial over a procedurally generated gated layout, Western Ghats ridges, the river, letterbox bars, film grain |
 | **The Land** | Camera swoops to the entrance arch; manifesto words light up as you scroll |
 | **Projects** | Pinned horizontal gallery of 6 projects with generated site-plan art, 3D tilt, area & budget filters |
@@ -27,12 +27,20 @@ and a static fallback when WebGL isn't available.
 ## Tech
 
 - [Three.js](https://threejs.org) — terrain, instanced plots / houses / trees / lamps, physical sky, PMREM reflections,
-  UnrealBloom and a custom grade pass (chromatic aberration, split-tone, vignette, grain)
+  a lightweight bloom (`LiteBloomPass`) and a custom grade pass (chromatic aberration, split-tone, vignette, grain)
 - [GSAP](https://gsap.com) + ScrollTrigger — reveals, pinning, counters
 - [Lenis](https://github.com/darkroomengineering/lenis) — smooth scroll
 - [Vite](https://vitejs.dev) — dev server and build. Fonts are self-hosted via Fontsource.
 
-No external images or 3D models: everything is generated in code, so the build is ~260 kB gzipped JS.
+No external images or 3D models: everything is generated in code.
+
+### Performance
+
+- First load is ~60 kB gzipped JS (UI + GSAP); Three.js and the world (~145 kB) are code-split and loaded after first paint.
+- The world is built in small chunks, and shaders are warmed up a couple of objects at a time (asynchronously where
+  `KHR_parallel_shader_compile` is available), so the page never freezes while the 3D loads.
+- Shadows are only re-rendered when the sun moves or houses grow; the hillside forest doesn't cast shadows.
+- Resolution adapts automatically on slower GPUs; phones and low-core devices use lighter settings.
 
 ## Run it
 

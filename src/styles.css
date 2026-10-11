@@ -46,9 +46,6 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
-body.is-loading {
-  overflow: hidden;
-}
 
 a {
   color: inherit;
@@ -88,13 +85,31 @@ em {
   height: 100lvh;
   z-index: 0;
   display: block;
+  opacity: 0;
+  transition: opacity 1.6s var(--ease);
+}
+.world-ready #webgl {
+  opacity: 1;
 }
 .no-webgl #webgl {
   display: none;
 }
-.no-webgl body,
-body.no-webgl {
-  background: radial-gradient(120% 80% at 60% 0%, #6b4a33 0%, #241a17 40%, #07090c 80%) fixed;
+/* Golden-hour backdrop shown instantly while the 3D world builds (and as the no-WebGL fallback) */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(90% 60% at 72% 18%, #c98f5e 0%, #7a5236 28%, #2c211b 58%, #07090c 100%);
+}
+.backdrop::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 55%;
+  background: linear-gradient(180deg, transparent, rgba(7, 9, 12, 0.85));
 }
 
 .scrim {
@@ -151,74 +166,6 @@ main {
   max-width: 1360px;
   margin: 0 auto;
   padding: 0 var(--gutter);
-}
-
-/* ------------------------------------------------------------- loader */
-
-.loader {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-items: center;
-  background: #050608;
-  clip-path: inset(0 0 0% 0);
-}
-.loader__inner {
-  text-align: center;
-  position: relative;
-  z-index: 2;
-}
-.loader__mark {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 18px;
-  fill: none;
-  stroke: var(--gold);
-  stroke-width: 1.2;
-  stroke-dasharray: 160;
-  stroke-dashoffset: 160;
-  animation: draw 2.4s var(--ease) forwards;
-}
-@keyframes draw {
-  to { stroke-dashoffset: 0; }
-}
-.loader__brand {
-  font-family: var(--serif);
-  font-size: clamp(28px, 4vw, 44px);
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  margin: 0 0 22px;
-  padding-left: 0.32em;
-}
-.loader__bar {
-  width: min(280px, 60vw);
-  height: 1px;
-  margin: 0 auto;
-  background: var(--line);
-  overflow: hidden;
-}
-.loader__bar span {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: var(--gold);
-  transform: scaleX(0);
-  transform-origin: left;
-}
-.loader__meta {
-  margin: 16px 0 0;
-  font-size: 12px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.loader__curtain {
-  position: absolute;
-  inset: 0;
-  background: #050608;
-  z-index: 1;
 }
 
 /* ------------------------------------------------------------- cursor */
