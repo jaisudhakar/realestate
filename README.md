@@ -19,28 +19,34 @@ approvals, amenities, trust stats, enquiry form) — but with an original brand,
 | **Living** | Houses rise across sold plots as the camera glides past the clubhouse and pool |
 | **Legacy → Visit** | Sun sets in real time: dusk, twilight, night; street lamps, windows and the pool glow (bloom); stars and moon come out |
 
-Also: Lenis smooth scrolling, custom cursor and magnetic buttons, HUD with chapter index and time-of-day,
+Also: custom cursor and magnetic buttons, HUD with chapter index and time-of-day,
 EMI calculator, testimonial slider, FAQ accordion, site-visit booking form with WhatsApp hand-off,
 mobile layout (swipe gallery, bottom-sheet masterplan, lighter GPU settings), `prefers-reduced-motion` support
 and a static fallback when WebGL isn't available.
 
 ## Tech
 
-- [Three.js](https://threejs.org) — terrain, instanced plots / houses / trees / lamps, physical sky, PMREM reflections,
-  a lightweight bloom (`LiteBloomPass`) and a custom grade pass (chromatic aberration, split-tone, vignette, grain)
+- [Three.js](https://threejs.org) — terrain, instanced plots / houses / trees / lamps, gradient sky with sun glow,
+  PMREM reflections on water and glass, additive glow sprites for lamps and moon
 - [GSAP](https://gsap.com) + ScrollTrigger — reveals, pinning, counters
-- [Lenis](https://github.com/darkroomengineering/lenis) — smooth scroll
 - [Vite](https://vitejs.dev) — dev server and build. Fonts are self-hosted via Fontsource.
 
 No external images or 3D models: everything is generated in code.
 
 ### Performance
 
-- First load is ~60 kB gzipped JS (UI + GSAP); Three.js and the world (~145 kB) are code-split and loaded after first paint.
-- The world is built in small chunks, and shaders are warmed up a couple of objects at a time (asynchronously where
-  `KHR_parallel_shader_compile` is available), so the page never freezes while the 3D loads.
-- Shadows are only re-rendered when the sun moves or houses grow; the hillside forest doesn't cast shadows.
-- Resolution adapts automatically on slower GPUs; phones and low-core devices use lighter settings.
+The page is built to stay responsive on modest laptops and phones:
+
+- **Native scrolling.** No scroll-jacking library and no blocking wheel/touch listeners, so the browser scrolls
+  on its own thread even while the 3D is drawing. The camera eases towards its scroll position for the cinematic glide.
+- **Instant first paint.** ~60 kB gzipped JS for the UI; Three.js and the world are code-split and load afterwards.
+  The world is built in chunks and shaders are warmed up a couple of objects at a time, so nothing freezes.
+- **Single render pass.** No full-screen post-processing. Vignette and grain are static CSS layers, glows are sprites,
+  and the sky is a cheap gradient (the physical sky is only rendered occasionally into the reflection map).
+  No `backdrop-filter`, which would force the browser to re-blur every glass panel over the moving canvas every frame.
+- **Adaptive quality.** The site measures its own frame time and steps down automatically: resolution, then shadows,
+  floating dust and the distant forest, then 30 fps rendering. Add `?lite` to the URL to start in the lightest mode.
+- Shadows are only re-rendered when the sun moves or houses grow.
 
 ## Run it
 

@@ -6,8 +6,8 @@
   --gold: #d9b26f;
   --gold-2: #f1d29a;
   --line: rgba(243, 237, 226, 0.14);
-  --glass: rgba(12, 14, 18, 0.48);
-  --glass-strong: rgba(10, 12, 16, 0.72);
+  --glass: rgba(12, 14, 18, 0.66);
+  --glass-strong: rgba(10, 12, 16, 0.84);
   --available: #5fd39a;
   --booked: #f0b14a;
   --sold: #9a9284;
@@ -27,13 +27,6 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-}
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
 }
 
 body {
@@ -117,7 +110,8 @@ em {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(120% 90% at 85% 40%, transparent 30%, rgba(5, 6, 9, 0.5) 100%),
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%),
+    radial-gradient(120% 90% at 85% 40%, transparent 30%, rgba(5, 6, 9, 0.5) 100%),
     linear-gradient(90deg, rgba(5, 6, 9, 0.62) 0%, rgba(5, 6, 9, 0.12) 52%, transparent 70%);
   transition: opacity 1s var(--ease);
 }
@@ -127,21 +121,13 @@ body.is-plan .scrim {
 
 .grain {
   position: fixed;
-  inset: -50%;
+  inset: 0;
   z-index: 60;
   pointer-events: none;
-  opacity: 0.07;
+  opacity: 0.05;
   background-image: var(--grain);
-  animation: grain 0.9s steps(6) infinite;
 }
-@keyframes grain {
-  0% { transform: translate(0, 0); }
-  20% { transform: translate(-6%, 4%); }
-  40% { transform: translate(4%, -8%); }
-  60% { transform: translate(-3%, 7%); }
-  80% { transform: translate(7%, 2%); }
-  100% { transform: translate(-2%, -4%); }
-}
+
 
 .letterbox {
   position: fixed;
@@ -326,7 +312,6 @@ main {
   border-radius: 50%;
   margin-left: auto;
   position: relative;
-  backdrop-filter: blur(10px);
 }
 .nav__burger span {
   position: absolute;
@@ -346,7 +331,6 @@ main {
   inset: 0;
   z-index: 45;
   background: rgba(5, 6, 9, 0.94);
-  backdrop-filter: blur(14px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -390,7 +374,6 @@ main {
 .btn--ghost {
   border-color: rgba(243, 237, 226, 0.32);
   background: rgba(10, 12, 16, 0.25);
-  backdrop-filter: blur(8px);
 }
 .btn--ghost:hover {
   border-color: var(--gold-2);
@@ -472,8 +455,6 @@ main {
   background: var(--glass);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 section {
@@ -728,7 +709,6 @@ body.letterbox-on .hud__geo {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background: rgba(5, 6, 9, 0.35);
-  backdrop-filter: blur(6px);
 }
 .marquee__track {
   display: flex;
@@ -777,7 +757,6 @@ body.letterbox-on .hud__geo {
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--glass);
-  backdrop-filter: blur(10px);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.3s, color 0.3s, border-color 0.3s;
@@ -811,7 +790,6 @@ body.letterbox-on .hud__geo {
   overflow: hidden;
   background: var(--glass-strong);
   border: 1px solid var(--line);
-  backdrop-filter: blur(16px);
   transform-style: preserve-3d;
   transition: border-color 0.4s;
   position: relative;
@@ -842,7 +820,6 @@ body.letterbox-on .hud__geo {
   padding: 7px 12px;
   border-radius: 999px;
   background: rgba(5, 6, 9, 0.6);
-  backdrop-filter: blur(8px);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1090,7 +1067,6 @@ body.letterbox-on .hud__geo {
   border-radius: 12px;
   background: rgba(8, 9, 12, 0.82);
   border: 1px solid var(--line);
-  backdrop-filter: blur(10px);
   font-size: 13px;
   white-space: nowrap;
   transform: translate(-50%, calc(-100% - 22px));
@@ -1137,7 +1113,6 @@ body.letterbox-on .hud__geo {
   position: relative;
   padding: 34px 28px 36px;
   background: rgba(8, 10, 14, 0.62);
-  backdrop-filter: blur(14px);
   transition: background 0.5s var(--ease);
   overflow: hidden;
 }
@@ -1223,7 +1198,6 @@ body.letterbox-on .hud__geo {
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--glass);
-  backdrop-filter: blur(10px);
   font-size: 12px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1708,5 +1682,5 @@ body.letterbox-on .fab {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .grain, .hud__dot, .hero__scroll i::after, .pulse { animation: none; }
+  .hud__dot, .hero__scroll i::after, .pulse { animation: none; }
 }

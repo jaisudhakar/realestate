@@ -5,7 +5,7 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      output: { manualChunks: { three: ['three'], gsap: ['gsap', 'lenis'] } },
+      output: { manualChunks: { three: ['three'], gsap: ['gsap'] } },
     },
   },
 });

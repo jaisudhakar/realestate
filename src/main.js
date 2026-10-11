@@ -7,7 +7,6 @@ import './styles.css';
 
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import Lenis from 'lenis';
 
 import { clamp } from './scene/utils.js';
 import { projects, chapters, brand } from './data/content.js';
@@ -54,21 +53,31 @@ let world = null;
 
 /* --------------------------------------------------------------- scrolling */
 
-const lenis = new Lenis({
-  duration: 1.4,
-  smoothWheel: !reduceMotion,
-  easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+// Plain native scrolling: the browser scrolls on its own thread, so the page never waits on
+// the 3D. The camera's own easing supplies the cinematic glide. (No wheel/touch listeners here
+// on purpose: a blocking wheel listener makes scrolling wait for every rendered frame.)
+const scroll = { y: scrollY, velocity: 0, direction: 1 };
+const onScroll = (fn) => window.addEventListener('scroll', fn, { passive: true });
+onScroll(() => {
+  const y = scrollY;
+  scroll.velocity = y - scroll.y;
+  scroll.direction = y >= scroll.y ? 1 : -1;
+  scroll.y = y;
 });
-lenis.on('scroll', ScrollTrigger.update);
-gsap.ticker.add((time) => lenis.raf(time * 1000));
-gsap.ticker.lagSmoothing(0);
+const maxScroll = () => document.documentElement.scrollHeight - innerHeight;
+function scrollToTarget(target, offset = 0) {
+  const el = typeof target === 'string' ? document.querySelector(target) : target;
+  const box = el.parentElement.classList.contains('pin-spacer') ? el.parentElement : el;
+  const top = box.getBoundingClientRect().top + scrollY + offset;
+  window.scrollTo({ top, behavior: reduceMotion ? 'auto' : 'smooth' });
+}
 
 const menuBtn = $('.nav__burger');
 const menu = $('#mobile-menu');
 const setMenu = (open) => {
   menuBtn.setAttribute('aria-expanded', open);
   menu.hidden = !open;
-  open ? lenis.stop() : lenis.start();
+  document.documentElement.style.overflow = open ? 'hidden' : '';
 };
 menuBtn.addEventListener('click', () => setMenu(menu.hidden));
 
@@ -80,7 +89,7 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   if (!menu.hidden) setMenu(false);
   const offset = target.id === 'masterplan' ? innerHeight * 0.5 : 0;
-  lenis.scrollTo(target, { offset, duration: reduceMotion ? 0 : 2.4 });
+  scrollToTarget(target, offset);
 });
 
 /* --------------------------------------------------------------- camera timeline */
@@ -249,7 +258,7 @@ function initMasterplan() {
     if (!p) return;
     $('#f-project').value = flagship.id;
     $('#f-plot').value = p.id;
-    lenis.scrollTo('#contact', { duration: 2.4 });
+    scrollToTarget('#contact');
   });
 }
 
@@ -298,8 +307,8 @@ function updatePicking() {
 
 let lastPhase = '';
 gsap.ticker.add(() => {
-  const y = lenis.scroll;
-  const limit = lenis.limit || 1;
+  const y = scroll.y;
+  const limit = maxScroll() || 1;
   hudBar.style.transform = `scaleX(${clamp(y / limit)})`;
   if (!world) return;
   world.setProgress(progressAt(y));
@@ -379,7 +388,7 @@ function setupScrollAnimations() {
   // Marquee reacts to scroll velocity
   const marquee = gsap.to('.marquee__track', { xPercent: -50, repeat: -1, duration: 30, ease: 'none' });
   let velocity = 0;
-  lenis.on('scroll', (l) => (velocity = l.velocity));
+  onScroll(() => (velocity = scroll.velocity));
   gsap.ticker.add(() => {
     velocity *= 0.92;
     const ts = marquee.timeScale();
@@ -461,9 +470,9 @@ function setupScrollAnimations() {
 
   // Nav: hide on the way down, return on the way up
   const nav = $('#nav');
-  lenis.on('scroll', ({ scroll, direction }) => {
-    nav.classList.toggle('is-solid', scroll > 60);
-    nav.classList.toggle('is-hidden', direction === 1 && scroll > innerHeight * 0.6 && menu.hidden);
+  onScroll(() => {
+    nav.classList.toggle('is-solid', scroll.y > 60);
+    nav.classList.toggle('is-hidden', scroll.direction === 1 && scroll.y > innerHeight * 0.6 && menu.hidden);
   });
 
   ScrollTrigger.addEventListener('refresh', computeAnchors);
@@ -498,7 +507,7 @@ $('#finder').addEventListener('submit', (e) => {
   zoneFilter = $('#finder-zone').value;
   budgetFilter = +$('#finder-budget').value;
   applyFilter();
-  lenis.scrollTo('#projects', { duration: 2.2 });
+  scrollToTarget('#projects');
 });
 $('#projects-track').addEventListener('click', (e) => {
   const b = e.target.closest('[data-project]');
@@ -635,7 +644,9 @@ function boot() {
 async function loadWorld() {
   try {
     const { World } = await import('./scene/World.js');
-    world = await new World($('#webgl'), { lowPower }).init();
+    // `?lite` in the URL forces the lightest 3D settings
+    const lite = new URLSearchParams(location.search).has('lite');
+    world = await new World($('#webgl'), { lowPower, lite }).init();
   } catch (err) {
     console.warn('WebGL unavailable, falling back to static backdrop.', err);
     world = null;
@@ -647,8 +658,8 @@ async function loadWorld() {
   initMasterplan();
   computeAnchors();
   // Short fly-in, skipped if the visitor has already started scrolling
-  world.intro = reduceMotion || lenis.scroll > innerHeight * 0.3 ? 0 : 1;
-  world.setProgress(progressAt(lenis.scroll));
+  world.intro = reduceMotion || scrollY > innerHeight * 0.3 ? 0 : 1;
+  world.setProgress(progressAt(scrollY));
   world.update();
   document.body.classList.add('world-ready');
   if (world.intro) gsap.to(world, { intro: 0, duration: 3, ease: 'power3.out' });

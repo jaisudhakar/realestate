@@ -1,16 +1,10 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { buildSite, riverX, SITE, PARK, ENTRANCE_Z } from './site.js';
 import { clamp, lerp, smoothstep, easeInOut, mulberry32 } from './utils.js';
-import { CinematicShader } from './CinematicShader.js';
-import { LiteBloomPass } from './LiteBloomPass.js';
 
 const STATUS_COLORS = {
   available: new THREE.Color('#5fd39a'),
@@ -31,10 +25,20 @@ const tmpRight = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const MOON_DIR = new THREE.Vector3(0.45, 0.6, -0.65).normalize();
 
+// Sky colours at golden hour → dusk → night
+const SKY_ZENITH = ['#5f7896', '#2b2f4f', '#060a16'].map((c) => new THREE.Color(c));
+const SKY_HORIZON = ['#f0b07c', '#b0657a', '#141b31'].map((c) => new THREE.Color(c));
+function lerpPalette(out, stops, t) {
+  const x = clamp(t) * (stops.length - 1);
+  const i = Math.min(Math.floor(x), stops.length - 2);
+  return out.copy(stops[i]).lerp(stops[i + 1], x - i);
+}
+
 export class World {
-  constructor(canvas, { lowPower = false } = {}) {
+  constructor(canvas, { lowPower = false, lite = false } = {}) {
     this.canvas = canvas;
-    this.lowPower = lowPower;
+    this.lowPower = lowPower || lite;
+    this.lite = lite;
     this.clock = new THREE.Clock();
     this.time = 0;
 
@@ -80,7 +84,7 @@ export class World {
         this.#buildDust();
         this.#buildStars();
         this.#buildMarker();
-        this.#initPost();
+        this.#buildGlows();
       },
       () => {
         this.setKeyframes([{ pos: [0, 85, 250], tgt: [0, 8, -110], night: 0, build: 0.2, plan: 0 }]);
@@ -92,33 +96,30 @@ export class World {
       step();
       await yieldToPage();
     }
+    if (this.lite) {
+      this.setQualityTier(2);
+      this.#setPixelRatio(0.75);
+    }
     await this.#warmUp(yieldToPage);
     return this;
   }
 
   // Compile shaders a few objects at a time (asynchronously where the browser supports it),
-  // then render one hidden frame, so no single frame stalls the page.
+  // drawing each batch to the still-hidden canvas so the driver finishes linking in small slices
+  // instead of stalling the first visible frame.
   async #warmUp(yieldToPage) {
     const drawables = this.scene.children.filter((o) => o.isMesh || o.isPoints || o.isLine || o.isGroup);
     const wasVisible = drawables.map((o) => o.visible);
     drawables.forEach((o) => (o.visible = false));
-    // Drawing into a tiny target (same format as the composer's buffers) forces the driver to
-    // finish linking each program now, in small slices, instead of all at once on the first frame.
-    const probe = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType });
     for (let i = 0; i < drawables.length; i += 2) {
       drawables.slice(i, i + 2).forEach((o) => (o.visible = true));
       await this.renderer.compileAsync(this.scene, this.camera);
       this.renderer.shadowMap.needsUpdate = true;
-      this.renderer.setRenderTarget(probe);
       this.renderer.render(this.scene, this.camera);
-      this.renderer.setRenderTarget(null);
       await yieldToPage();
     }
-    probe.dispose();
     drawables.forEach((o, i) => (o.visible = wasVisible[i]));
     this.renderer.shadowMap.needsUpdate = true;
-    this.composer.render(0);
-    await yieldToPage();
   }
 
   /* ---------------------------------------------------------------- setup */
@@ -130,7 +131,7 @@ export class World {
       powerPreference: 'high-performance',
       stencil: false,
     });
-    this.maxPixelRatio = Math.min(window.devicePixelRatio, this.lowPower ? 1 : 1.5);
+    this.maxPixelRatio = Math.min(window.devicePixelRatio, this.lowPower ? 1 : 1.25);
     r.setPixelRatio(this.maxPixelRatio);
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 0.55;
@@ -149,22 +150,59 @@ export class World {
   }
 
   #initSky() {
-    const sky = new Sky();
-    sky.scale.setScalar(9000);
-    const u = sky.material.uniforms;
-    u.turbidity.value = 7;
-    u.rayleigh.value = 2.2;
-    u.mieCoefficient.value = 0.006;
-    u.mieDirectionalG.value = 0.86;
+    // Visible sky: a cheap gradient with a sun glow (the physical sky shader is far too
+    // expensive to run full-screen every frame on modest GPUs).
+    this.skyUniforms = {
+      uSun: { value: new THREE.Vector3() },
+      uZenith: { value: new THREE.Color() },
+      uHorizon: { value: new THREE.Color() },
+      uSunColor: { value: new THREE.Color() },
+      uSunK: { value: 1 },
+    };
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(9000, 32, 16),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        uniforms: this.skyUniforms,
+        vertexShader: /* glsl */ `
+          varying vec3 vDir;
+          void main() {
+            vDir = normalize(position);
+            vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            gl_Position = p.xyww;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform vec3 uSun, uZenith, uHorizon, uSunColor; uniform float uSunK;
+          varying vec3 vDir;
+          void main() {
+            vec3 d = normalize(vDir);
+            float h = max(d.y, 0.0);
+            vec3 col = mix(uHorizon, uZenith, pow(h, 0.45));
+            float s = max(dot(d, uSun), 0.0);
+            col += uSunColor * (pow(s, 6.0) * 0.35 + pow(s, 60.0) * 0.8 + smoothstep(0.9993, 0.9997, s) * 6.0) * uSunK;
+            gl_FragColor = vec4(col, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }`,
+      })
+    );
+    sky.frustumCulled = false;
+    sky.renderOrder = -1;
     this.sky = sky;
     this.scene.add(sky);
     this.sun = new THREE.Vector3();
 
-    // A separate scene for environment-map generation (reflections on water/glass)
+    // The physical sky is only rendered (rarely) into the reflection map for water and glass
     this.envScene = new THREE.Scene();
     this.envSky = new Sky();
     this.envSky.scale.setScalar(9000);
-    Object.assign(this.envSky.material.uniforms.turbidity, { value: 7 });
+    const eu = this.envSky.material.uniforms;
+    eu.turbidity.value = 7;
+    eu.rayleigh.value = 2.2;
+    eu.mieCoefficient.value = 0.006;
+    eu.mieDirectionalG.value = 0.86;
     this.envScene.add(this.envSky);
     this.pmrem = new THREE.PMREMGenerator(this.renderer);
     this.lastEnvNight = -1;
@@ -189,7 +227,7 @@ export class World {
     this.scene.add(sunLight, sunLight.target);
     this.sunLight = sunLight;
 
-    // Moon disc (blooms at night)
+    // Moon disc (glow halo added in #buildGlows)
     this.moon = new THREE.Mesh(
       new THREE.SphereGeometry(60, 24, 16),
       new THREE.MeshBasicMaterial({ color: '#f4f1ff', fog: false, transparent: true, toneMapped: false })
@@ -491,7 +529,7 @@ export class World {
     const rand = mulberry32(99);
     const list = [...this.site.trees];
     // Scatter forest on the hills
-    const extra = this.lowPower ? 900 : 2600;
+    const extra = this.lowPower ? 600 : 1500;
     for (let i = 0; i < extra; i++) {
       const x = (rand() * 2 - 1) * 1300;
       const z = (rand() * 2 - 1) * 1300 - 200;
@@ -515,22 +553,25 @@ export class World {
       true
     );
     const round = mergeGeometries(
-      [trunkG.clone().toNonIndexed(), new THREE.IcosahedronGeometry(1.35, 1).scale(1, 0.9, 1).translate(0, 2.4, 0)],
+      [trunkG.clone().toNonIndexed(), new THREE.IcosahedronGeometry(1.35, 0).scale(1, 0.9, 1).translate(0, 2.4, 0)],
       true
     );
     const trunkMat = new THREE.MeshLambertMaterial({ color: '#5b4330' });
     const leafMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
     const greens = ['#3f6b35', '#557a3a', '#2f5a34', '#6b7d3a', '#486f3f'].map((c) => new THREE.Color(c));
 
-    // Hillside forest sits outside the shadow camera, so only layout trees cast shadows
+    // Distant hillside forest: single low-poly crowns, no trunks, no shadows
+    const hillPine = new THREE.ConeGeometry(1.3, 4, 5).translate(0, 2.6, 0);
+    const hillRound = new THREE.IcosahedronGeometry(1.5, 0).translate(0, 2.4, 0);
     [
       [pine, 0, false],
       [round, 1, false],
-      [pine, 0, true],
-      [round, 1, true],
+      [hillPine, 0, true],
+      [hillRound, 1, true],
     ].forEach(([geo, kind, hill]) => {
       const items = list.filter((t) => t.kind === kind && !!t.hill === hill);
-      const mesh = new THREE.InstancedMesh(geo, [trunkMat, leafMat], items.length);
+      const mesh = new THREE.InstancedMesh(geo, hill ? leafMat : [trunkMat, leafMat], items.length);
+      if (hill) (this.hillForest ??= []).push(mesh);
       mesh.castShadow = !this.lowPower && !hill;
       items.forEach((t, i) => {
         const s = t.s * 1.6;
@@ -574,6 +615,20 @@ export class World {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
+    const haloPos = new Float32Array(lamps.length * 3);
+    lamps.forEach((l, i) => haloPos.set([l.x, 4.65, l.z], i * 3));
+    const haloGeo = new THREE.BufferGeometry();
+    haloGeo.setAttribute('position', new THREE.BufferAttribute(haloPos, 3));
+    this.haloMat = new THREE.PointsMaterial({
+      map: this.glowTex,
+      color: '#ffc27a',
+      size: 6,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.scene.add(new THREE.Points(haloGeo, this.haloMat));
     const poolGeo = new THREE.PlaneGeometry(9, 9).rotateX(-Math.PI / 2);
     const pool = new THREE.InstancedMesh(poolGeo, this.poolMat, lamps.length);
     lamps.forEach((l, i) => {
@@ -776,7 +831,8 @@ export class World {
           gl_FragColor = vec4(mix(day, night, vN) * a * vA, a * vA);
         }`,
     });
-    this.scene.add(new THREE.Points(geo, this.dustMat));
+    this.dust = new THREE.Points(geo, this.dustMat);
+    this.scene.add(this.dust);
   }
 
   #buildStars() {
@@ -827,15 +883,14 @@ export class World {
     this.scene.add(this.marker);
   }
 
-  #initPost() {
-    const composer = new EffectComposer(this.renderer);
-    composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new LiteBloomPass({ strength: 0.35, threshold: 0.9 });
-    composer.addPass(this.bloom);
-    composer.addPass(new OutputPass());
-    this.cine = new ShaderPass(CinematicShader);
-    composer.addPass(this.cine);
-    this.composer = composer;
+  // Cheap "bloom": additive glow sprites instead of full-screen post-processing.
+  #buildGlows() {
+    this.moonHalo = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: this.glowTex, color: '#b9c8ff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0 })
+    );
+    this.moonHalo.scale.setScalar(900);
+    this.moonHalo.position.copy(this.moon.position);
+    this.scene.add(this.moonHalo);
   }
 
   /* --------------------------------------------------------- timeline api */
@@ -927,8 +982,12 @@ export class World {
     const phi = THREE.MathUtils.degToRad(90 - elevation);
     const theta = THREE.MathUtils.degToRad(158);
     this.sun.setFromSphericalCoords(1, phi, theta);
-    this.sky.material.uniforms.sunPosition.value.copy(this.sun);
-    this.sky.material.uniforms.rayleigh.value = lerp(2.2, 0.6, night);
+    const su = this.skyUniforms;
+    su.uSun.value.copy(this.sun);
+    lerpPalette(su.uZenith.value, SKY_ZENITH, night);
+    lerpPalette(su.uHorizon.value, SKY_HORIZON, night);
+    su.uSunColor.value.set('#ffb470');
+    su.uSunK.value = 1 - smoothstep(0.15, 0.6, night);
     this.envSky.material.uniforms.sunPosition.value.copy(this.sun);
 
     const dayFog = new THREE.Color('#e3ae84');
@@ -970,14 +1029,15 @@ export class World {
     this.moon.material.opacity = smoothstep(0.45, 0.95, night);
     this.moon.material.color.set('#f4f1ff').multiplyScalar(1 + lit * 2);
     this.dustMat.uniforms.uNight.value = lit;
-    this.bloom.strength = lerp(0.3, 1.25, lit);
-    this.bloom.threshold = lerp(0.9, 0.6, lit);
+    this.haloMat.opacity = lit * 0.85;
+    this.moonHalo.material.opacity = smoothstep(0.5, 1, night) * 0.35;
+
 
     // Rebuild reflections only when the sky meaningfully changes
     const envLevel = Math.round(night * 4);
     if (force || envLevel !== this.lastEnvNight) {
       this.lastEnvNight = envLevel;
-      this.envSky.material.uniforms.rayleigh.value = this.sky.material.uniforms.rayleigh.value;
+      this.envSky.material.uniforms.rayleigh.value = lerp(2.2, 0.6, night);
       this.envRT?.dispose();
       this.envRT = this.pmrem.fromScene(this.envScene, 0, 1, 20000);
       this.scene.environment = this.envRT.texture;
@@ -1000,7 +1060,8 @@ export class World {
   }
 
   update() {
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const rawDt = this.clock.getDelta();
+    const dt = Math.min(rawDt, 0.05);
     this.time += dt;
     const k = 1 - Math.exp(-dt * 2.2); // cinematic inertia
 
@@ -1052,28 +1113,54 @@ export class World {
     const ma = this.markerMat.uniforms.uAlpha;
     ma.value = lerp(ma.value, this.selected >= 0 && this.state.plan > 0.5 ? 1 : 0, 1 - Math.exp(-dt * 6));
     this.marker.visible = ma.value > 0.01;
-    this.cine.uniforms.uTime.value = t;
 
-    this.composer.render(dt);
-    this.#adaptResolution(dt);
+    // On the weakest tier only every other frame is drawn (camera still eases every frame)
+    this.frameIndex = (this.frameIndex ?? 0) + 1;
+    if (this.frameIndex % (this.frameSkip ?? 1)) return;
+    this.renderer.render(this.scene, this.camera);
+    this.#adaptQuality(rawDt);
   }
 
-  // Drop render resolution on slower GPUs to keep scrolling smooth
-  #adaptResolution(dt) {
+  // Measure real frame times and step quality down until the scene keeps up:
+  // resolution first, then shadows / dust / distant forest, then 30 fps rendering.
+  #adaptQuality(rawDt) {
+    if (this.tier >= 2) return;
     this.frameTimes ??= [];
-    this.frameTimes.push(dt);
-    if (this.frameTimes.length < 90) return;
-    const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+    this.frameTimes.push(rawDt);
+    if (this.frameTimes.length < 20) return;
+    const sorted = [...this.frameTimes].sort((a, b) => a - b);
+    const typical = sorted[Math.floor(sorted.length / 2)];
     this.frameTimes.length = 0;
     const pr = this.renderer.getPixelRatio();
-    let next = pr;
-    if (avg > 1 / 40 && pr > 0.6) next = Math.max(0.6, pr - 0.2);
-    else if (avg < 1 / 58 && pr < this.maxPixelRatio && this.lowered) next = Math.min(this.maxPixelRatio, pr + 0.1);
-    if (next !== pr) {
-      this.lowered = true;
-      this.renderer.setPixelRatio(next);
-      this.resize();
+    if (typical > 1 / 24) {
+      // Far too slow: go straight to the light settings instead of stepping down slowly
+      this.#setPixelRatio(0.75);
+      this.setQualityTier(2);
+    } else if (typical > 1 / 40) {
+      if (pr > 0.76) this.#setPixelRatio(Math.max(0.75, pr - 0.25));
+      else this.setQualityTier((this.tier ?? 0) + 1);
+    } else if (typical < 1 / 58 && this.lowered && pr < this.maxPixelRatio && !this.tier) {
+      this.#setPixelRatio(Math.min(this.maxPixelRatio, pr + 0.1));
     }
+  }
+
+  #setPixelRatio(pr) {
+    this.lowered = true;
+    this.renderer.setPixelRatio(pr);
+    this.resize();
+  }
+
+  // 0 = full, 1 = no shadows / dust / distant forest, 2 = also render the 3D at 30 fps
+  setQualityTier(tier) {
+    tier = Math.min(tier, 2);
+    if (tier >= 1 && !(this.tier >= 1)) {
+      this.sunLight.castShadow = false;
+      this.renderer.shadowMap.enabled = false;
+      this.dust.visible = false;
+      this.hillForest.forEach((m) => (m.visible = false));
+    }
+    this.tier = tier;
+    this.frameSkip = tier >= 2 ? 2 : 1;
   }
 
   resize() {
@@ -1085,9 +1172,7 @@ export class World {
     this.camera.fov = w / h < 0.8 ? 52 : 38;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
-    this.composer.setSize(w, h);
     const pr = this.renderer.getPixelRatio();
-    this.cine.uniforms.uResolution.value.set(w * pr, h * pr);
     this.dustMat.uniforms.uPixel.value = pr;
   }
 }

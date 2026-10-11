@@ -12,7 +12,6 @@
     "@fontsource-variable/manrope": "5.1.0",
     "@fontsource/cormorant-garamond": "5.1.0",
     "gsap": "3.12.5",
-    "lenis": "1.1.13",
     "three": "0.170.0"
   },
   "devDependencies": {
