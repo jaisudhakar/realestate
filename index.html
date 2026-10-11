@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aurum Estates — Premium Plots in Coimbatore</title>
+    <meta
+      name="description"
+      content="DTCP & RERA approved gated plots in Saravanampatti, Vadavalli, Perur, Kovaipudur, Sulur and Thudiyalur, Coimbatore. Explore the 3D masterplan and book a free site visit."
+    />
+    <meta name="theme-color" content="#07090c" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%2307090c'/%3E%3Cpath d='M20 7 L33 33 H27.5 L20 17 L12.5 33 H7 Z' fill='%23d9b26f'/%3E%3C/svg%3E" />
+  </head>
+  <body class="is-loading">
+    <canvas id="webgl" aria-hidden="true"></canvas>
+    <div class="scrim" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="letterbox letterbox--top" aria-hidden="true"></div>
+    <div class="letterbox letterbox--bottom" aria-hidden="true"></div>
+
+    <!-- Preloader -->
+    <div class="loader" id="loader" role="status" aria-live="polite">
+      <div class="loader__inner">
+        <svg class="loader__mark" viewBox="0 0 40 40" aria-hidden="true">
+          <path d="M20 4 L35 35 H29 L20 15.5 L11 35 H5 Z" />
+          <path d="M14.5 27 H25.5" />
+        </svg>
+        <p class="loader__brand">Aurum Estates</p>
+        <div class="loader__bar"><span></span></div>
+        <p class="loader__meta"><span class="loader__count">0</span>% · Surveying the land</p>
+      </div>
+      <div class="loader__curtain"></div>
+    </div>
+
+    <!-- Cursor -->
+    <div class="cursor" aria-hidden="true">
+      <div class="cursor__ring"><span class="cursor__label"></span></div>
+      <div class="cursor__dot"></div>
+    </div>
+
+    <!-- Navigation -->
+    <header class="nav" id="nav">
+      <a class="nav__logo" href="#hero" aria-label="Aurum Estates — home">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4 L35 35 H29 L20 15.5 L11 35 H5 Z" /></svg>
+        <span>Aurum<em>Estates</em></span>
+      </a>
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#projects">Projects</a>
+        <a href="#masterplan">Masterplan</a>
+        <a href="#amenities">Amenities</a>
+        <a href="#trust">Why Aurum</a>
+        <a href="#emi">EMI</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <a class="btn btn--gold nav__cta magnetic" href="#contact" data-cursor="Visit">Book site visit</a>
+      <button class="nav__burger" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span></span><span></span>
+      </button>
+    </header>
+    <div class="mobile-menu" id="mobile-menu" hidden>
+      <a href="#projects">Projects</a>
+      <a href="#masterplan">Masterplan</a>
+      <a href="#amenities">Amenities</a>
+      <a href="#trust">Why Aurum</a>
+      <a href="#emi">EMI Calculator</a>
+      <a href="#contact">Book a site visit</a>
+    </div>
+
+    <!-- Cinematic HUD -->
+    <aside class="hud" aria-hidden="true">
+      <div class="hud__geo">
+        <span class="hud__dot"></span>
+        <span>11.0796° N, 76.9989° E</span>
+        <span class="hud__sep">/</span>
+        <span class="hud__time">17:24</span>
+        <span class="hud__phase">Golden hour</span>
+      </div>
+      <ol class="hud__chapters"></ol>
+      <div class="hud__progress"><span></span></div>
+    </aside>
+
+    <main id="content">
+      <!-- 01 HERO -->
+      <section class="hero chapter" id="hero" data-chapter="hero">
+        <div class="hero__inner">
+          <p class="eyebrow" data-reveal>Premium plots in Coimbatore</p>
+          <h1 class="hero__title" data-split>
+            Land that writes<br /><em>your legacy.</em>
+          </h1>
+          <p class="hero__lead" data-reveal>
+            DTCP &amp; RERA approved gated communities across Saravanampatti, Vadavalli, Perur and beyond —
+            with roads, lights and water ready before you buy.
+          </p>
+          <div class="hero__actions" data-reveal>
+            <a href="#projects" class="btn btn--gold magnetic" data-cursor="Explore">Explore projects</a>
+            <a href="#masterplan" class="btn btn--ghost magnetic" data-cursor="3D">
+              <span class="btn__icon" aria-hidden="true">◎</span> Walk the 3D masterplan
+            </a>
+          </div>
+        </div>
+
+        <form class="finder glass" id="finder" data-reveal aria-label="Find a plot">
+          <label>
+            <span>Location</span>
+            <select name="zone" id="finder-zone"></select>
+          </label>
+          <label>
+            <span>Budget</span>
+            <select name="budget" id="finder-budget">
+              <option value="0">Any budget</option>
+              <option value="25">Up to ₹25 L</option>
+              <option value="35">Up to ₹35 L</option>
+              <option value="50">Up to ₹50 L</option>
+            </select>
+          </label>
+          <button class="btn btn--gold" type="submit">Find plots</button>
+        </form>
+
+        <div class="hero__scroll" aria-hidden="true">
+          <span>Scroll to fly in</span>
+          <i></i>
+        </div>
+      </section>
+
+      <!-- 02 INTRO / MANIFESTO -->
+      <section class="intro chapter" id="intro" data-chapter="intro">
+        <div class="container">
+          <p class="eyebrow" data-reveal>01 — The Land</p>
+          <p class="manifesto" data-words>
+            For over two decades we have turned open fields at the foot of the Western Ghats into living,
+            breathing neighbourhoods — with clear titles, honest pricing and every road laid before the first plot is sold.
+          </p>
+          <div class="pillars">
+            <article class="pillar glass" data-reveal>
+              <span class="pillar__num">01</span>
+              <h3>DTCP &amp; RERA approved</h3>
+              <p>Every layout is government approved and registered, with documents you can verify online.</p>
+            </article>
+            <article class="pillar glass" data-reveal>
+              <span class="pillar__num">02</span>
+              <h3>Up to 80% bank loan</h3>
+              <p>Pre-approved with leading banks, so your financing moves as fast as your decision.</p>
+            </article>
+            <article class="pillar glass" data-reveal>
+              <span class="pillar__num">03</span>
+              <h3>Ready to construct</h3>
+              <p>Blacktop roads, drainage, EB and water connections — in place before handover.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee__track">
+          <span>DTCP Approved</span><b>✦</b><span>RERA Registered</span><b>✦</b><span>Clear Title</span><b>✦</b>
+          <span>Bank Loan Assistance</span><b>✦</b><span>Gated Community</span><b>✦</b><span>Ready to Construct</span><b>✦</b>
+          <span>DTCP Approved</span><b>✦</b><span>RERA Registered</span><b>✦</b><span>Clear Title</span><b>✦</b>
+          <span>Bank Loan Assistance</span><b>✦</b><span>Gated Community</span><b>✦</b><span>Ready to Construct</span><b>✦</b>
+        </div>
+      </div>
+
+      <!-- 03 PROJECTS -->
+      <section class="projects chapter" id="projects" data-chapter="projects">
+        <div class="projects__pin">
+          <div class="projects__head container">
+            <div>
+              <p class="eyebrow" data-reveal>02 — Projects</p>
+              <h2 class="h2" data-split>Plots across <em>Coimbatore</em></h2>
+            </div>
+            <div class="chips" role="tablist" aria-label="Filter by area" id="zone-chips"></div>
+          </div>
+          <div class="projects__viewport">
+            <div class="projects__track" id="projects-track"></div>
+          </div>
+          <p class="projects__empty" id="projects-empty" hidden>No projects match that budget in this area yet — try another filter.</p>
+        </div>
+      </section>
+
+      <!-- 04 MASTERPLAN -->
+      <section class="masterplan chapter" id="masterplan" data-chapter="masterplan">
+        <div class="masterplan__sticky">
+          <div class="mp-panel glass" id="mp-panel">
+            <p class="eyebrow">03 — Interactive masterplan</p>
+            <h2 class="h3">Aurum Meadows,<br /><em>Saravanampatti</em></h2>
+            <p class="mp-panel__hint">
+              <span class="pulse" aria-hidden="true"></span>
+              Hover over the layout and click any plot to see its size, facing and price.
+            </p>
+            <ul class="legend" id="mp-legend"></ul>
+            <label class="mp-jump">
+              <span>Or jump to an available plot</span>
+              <select id="mp-jump"></select>
+            </label>
+            <div class="plot-card" id="plot-card" hidden>
+              <div class="plot-card__top">
+                <span class="plot-card__id" id="pc-id">A-001</span>
+                <span class="status" id="pc-status">Available</span>
+              </div>
+              <dl class="plot-card__grid">
+                <div><dt>Area</dt><dd id="pc-area">—</dd></div>
+                <div><dt>Dimensions</dt><dd id="pc-dims">—</dd></div>
+                <div><dt>Facing</dt><dd id="pc-facing">—</dd></div>
+                <div><dt>Indicative price</dt><dd id="pc-price">—</dd></div>
+              </dl>
+              <button class="btn btn--gold btn--block" id="pc-enquire" type="button">Enquire about this plot</button>
+            </div>
+          </div>
+          <div class="mp-tooltip" id="mp-tooltip" role="tooltip" hidden></div>
+        </div>
+      </section>
+
+      <!-- 05 AMENITIES -->
+      <section class="amenities chapter" id="amenities" data-chapter="amenities">
+        <div class="container">
+          <div class="section-head">
+            <p class="eyebrow" data-reveal>04 — Living</p>
+            <h2 class="h2" data-split>Everything in place,<br /><em>before you arrive.</em></h2>
+          </div>
+          <div class="amenity-grid" id="amenity-grid"></div>
+        </div>
+      </section>
+
+      <!-- 06 TRUST -->
+      <section class="trust chapter" id="trust" data-chapter="trust">
+        <div class="container">
+          <div class="section-head section-head--center">
+            <p class="eyebrow" data-reveal>05 — Legacy</p>
+            <h2 class="h2" data-split>Two decades of <em>keeping promises.</em></h2>
+          </div>
+          <div class="stats" id="stats"></div>
+          <div class="badges" data-reveal>
+            <span>DTCP</span><span>TNRERA</span><span>ISO 9001</span><span>CREDAI Member</span><span>Partner banks: 14</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 07 EMI -->
+      <section class="emi chapter" id="emi" data-chapter="emi">
+        <div class="container emi__wrap">
+          <div class="emi__copy">
+            <p class="eyebrow" data-reveal>06 — Planning</p>
+            <h2 class="h2" data-split>Plan your plot,<br /><em>month by month.</em></h2>
+            <p class="lead" data-reveal>An indicative plot-loan EMI. Our finance desk can get you a firm sanction within a week.</p>
+          </div>
+          <form class="emi__calc glass" id="emi-form" data-reveal aria-label="EMI calculator">
+            <label class="range">
+              <span>Plot value <output id="emi-price-out">₹30 L</output></span>
+              <input type="range" id="emi-price" min="10" max="100" step="1" value="30" />
+            </label>
+            <label class="range">
+              <span>Down payment <output id="emi-down-out">25%</output></span>
+              <input type="range" id="emi-down" min="10" max="60" step="5" value="25" />
+            </label>
+            <label class="range">
+              <span>Interest rate <output id="emi-rate-out">9.0%</output></span>
+              <input type="range" id="emi-rate" min="7" max="13" step="0.1" value="9" />
+            </label>
+            <label class="range">
+              <span>Tenure <output id="emi-years-out">15 yrs</output></span>
+              <input type="range" id="emi-years" min="3" max="20" step="1" value="15" />
+            </label>
+            <div class="emi__result">
+              <span>Monthly EMI</span>
+              <strong id="emi-value">₹0</strong>
+              <small id="emi-meta">Loan ₹0 · Total interest ₹0</small>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- 08 VOICES -->
+      <section class="voices chapter" id="voices" data-chapter="voices">
+        <div class="container">
+          <p class="eyebrow" data-reveal>07 — Voices</p>
+          <div class="quotes" id="quotes" aria-live="polite"></div>
+          <div class="quotes__nav" id="quotes-nav" role="tablist" aria-label="Testimonials"></div>
+        </div>
+      </section>
+
+      <section class="faq" id="faq">
+        <div class="container faq__wrap">
+          <div>
+            <p class="eyebrow" data-reveal>Questions</p>
+            <h2 class="h2" data-split>Good to <em>know.</em></h2>
+          </div>
+          <div class="faq__list" id="faq-list"></div>
+        </div>
+      </section>
+
+      <!-- 09 CONTACT -->
+      <section class="contact chapter" id="contact" data-chapter="contact">
+        <div class="container contact__wrap">
+          <div class="contact__copy">
+            <p class="eyebrow" data-reveal>08 — Visit</p>
+            <h2 class="h2 h2--xl" data-split>Stand on<br /><em>your land.</em></h2>
+            <p class="lead" data-reveal>
+              Free site visits every day, 9 am – 6 pm, with complimentary pick-up anywhere in Coimbatore.
+            </p>
+            <ul class="contact__list" data-reveal>
+              <li><span>Call</span><a href="tel:+919000000000" class="link">+91 90000 00000</a></li>
+              <li><span>Email</span><a href="mailto:hello@aurumestates.example" class="link">hello@aurumestates.example</a></li>
+              <li><span>Office</span><address>Avinashi Road, Peelamedu, Coimbatore 641004</address></li>
+            </ul>
+          </div>
+          <form class="contact__form glass" id="contact-form" novalidate data-reveal>
+            <div class="field">
+              <input id="f-name" name="name" type="text" placeholder=" " autocomplete="name" required />
+              <label for="f-name">Full name</label>
+            </div>
+            <div class="field">
+              <input id="f-phone" name="phone" type="tel" placeholder=" " autocomplete="tel" inputmode="tel" pattern="[0-9+ ]{10,15}" required />
+              <label for="f-phone">Mobile number</label>
+            </div>
+            <div class="field">
+              <select id="f-project" name="project" required></select>
+              <label for="f-project" class="is-static">Project</label>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <input id="f-plot" name="plot" type="text" placeholder=" " />
+                <label for="f-plot">Plot no. (optional)</label>
+              </div>
+              <div class="field">
+                <input id="f-date" name="date" type="date" required />
+                <label for="f-date" class="is-static">Visit date</label>
+              </div>
+            </div>
+            <label class="check">
+              <input type="checkbox" name="pickup" checked />
+              <span>I'd like a free pick-up &amp; drop</span>
+            </label>
+            <button class="btn btn--gold btn--block magnetic" type="submit" data-cursor="Send">Book my site visit</button>
+            <p class="form-note" id="form-note" role="status"></p>
+          </form>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="container">
+          <p class="footer__big" aria-hidden="true">Aurum</p>
+          <div class="footer__grid">
+            <div>
+              <p class="footer__title">Aurum Estates</p>
+              <p>Premium DTCP &amp; RERA approved plots in Coimbatore since 2001.</p>
+            </div>
+            <div>
+              <p class="footer__title">Locations</p>
+              <p>Saravanampatti · Vadavalli · Perur · Kovaipudur · Sulur · Thudiyalur</p>
+            </div>
+            <div>
+              <p class="footer__title">Explore</p>
+              <p><a href="#projects" class="link">Projects</a> · <a href="#masterplan" class="link">Masterplan</a> · <a href="#emi" class="link">EMI</a> · <a href="#faq" class="link">FAQ</a></p>
+            </div>
+          </div>
+          <p class="footer__legal">
+            © <span id="year"></span> Aurum Estates. Sample website — all projects, prices and figures are illustrative.
+            Images are computer generated. Prices are indicative and exclude registration, stamp duty and GST.
+          </p>
+        </div>
+      </footer>
+    </main>
+
+    <a class="fab" id="whatsapp" href="https://wa.me/919000000000" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3a.5.5 0 0 0 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg>
+    </a>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
